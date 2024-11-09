@@ -1,0 +1,4 @@
+build/
+dist/
+wget-log
+main.spec
