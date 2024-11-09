@@ -1,6 +1,5 @@
-from twisted.internet import protocol, reactor, endpoints, defer
+from twisted.internet import reactor, endpoints
 from twisted.web import server, resource
-from twisted.protocols.basic import LineReceiver
 from twisted.web.server import NOT_DONE_YET
 from twisted.internet.threads import deferToThread
 import json
@@ -17,12 +16,14 @@ pipe = pipeline(
     device_map="auto",
 )
 
+system_requarenments = str()
+
 def process_with_llama(user_input):
     """
     Process input text through LLaMA model
     """
     messages = [
-        {"role": "system", "content": "You are a pirate chatbot who always responds in pirate speak!"},
+        {"role": "system", "content": system_requarenments},
         {"role": "user", "content": user_input},
     ]
     
@@ -35,45 +36,6 @@ def process_with_llama(user_input):
     )
     
     return outputs[0]["generated_text"][-1]
-
-# TCP Protocol Handler
-class TCPMessageServer(LineReceiver):
-    def __init__(self, factory):
-        self.factory = factory
-
-    def connectionMade(self):
-        self.factory.clients.append(self)
-        print(f"New TCP connection. Total clients: {len(self.factory.clients)}")
-
-    def connectionLost(self, reason):
-        self.factory.clients.remove(self)
-        print(f"Client disconnected. Total clients: {len(self.factory.clients)}")
-
-    @defer.inlineCallbacks
-    def lineReceived(self, line):
-        try:
-            # Decode the received line as UTF-8
-            message = line.decode('utf-8')
-            print(f"Received TCP message: {message}")
-            
-            # Process the message through LLaMA in a separate thread
-            llama_response = yield deferToThread(process_with_llama, message)
-            
-            # Send the LLaMA response back
-            response = f"LLaMA says: {llama_response}"
-            self.sendLine(response.encode('utf-8'))
-            
-        except Exception as e:
-            error_msg = f"Error processing message: {str(e)}"
-            self.sendLine(error_msg.encode('utf-8'))
-
-# TCP Factory
-class TCPServerFactory(protocol.Factory):
-    def __init__(self):
-        self.clients = []
-
-    def buildProtocol(self, addr):
-        return TCPMessageServer(self)
 
 # HTTP Request Handler
 class HTTPMessageServer(resource.Resource):
@@ -133,11 +95,12 @@ class HTTPMessageServer(resource.Resource):
         return json.dumps(response).encode('utf-8')
 
 def main():
-    # Set up TCP server
-    tcp_endpoint = endpoints.TCP4ServerEndpoint(reactor, 8007)
-    tcp_endpoint.listen(TCPServerFactory())
-    print("TCP Server started on port 8007")
-
+    if len(sys.argv) > 1:
+        global system_requarenments
+        system_requarenments = sys.argv[1]
+        
+    print(f"System requirements: {system_requarenments}")
+    
     # Set up HTTP server
     http_endpoint = endpoints.TCP4ServerEndpoint(reactor, 8008)
     http_endpoint.listen(server.Site(HTTPMessageServer()))
